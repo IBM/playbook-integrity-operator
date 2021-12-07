@@ -1,0 +1,35 @@
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: "{{ ansible_operator_meta.name }}"
+  namespace: "{{ ansible_operator_meta.namespace }}"
+spec:
+  schedule: "*/2 * * * *" # every 2 minutes
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          serviceAccountName: awx-playbook-integrity-operator
+          containers:
+            - name: "{{ ansible_operator_meta.name }}"
+              image: "{{ _runner_image }}"
+              imagePullPolicy: Always
+              env:
+                - name: FORCE_UPDATE
+                  value: "False"
+                - name: TOKEN
+                  value: "{{ tower_config_secret['resources'][0]['data']['token'] | b64decode | trim }}"
+                - name: CONTROLLER_HOST
+                  value: "{{ tower_config_secret['resources'][0]['data']['host'] | b64decode | trim }}"
+                - name: CONTROLLER_PROJECT_NAME
+                  value: "{{ project_name }}"
+                - name: CONTROLLER_VERIFY_SSL
+                  value: "False"
+                - name: PLAYBOOKINTEGRITY_NAME
+                  value: "{{ ansible_operator_meta.name }}"
+                - name: PLAYBOOKINTEGRITY_NAMESPACE
+                  value: "{{ ansible_operator_meta.namespace }}"
+          restartPolicy: Never
+      backoffLimit: 1

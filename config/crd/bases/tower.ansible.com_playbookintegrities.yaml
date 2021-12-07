@@ -1,0 +1,47 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: playbookintegrities.tower.ansible.com
+spec:
+  group: tower.ansible.com
+  names:
+    kind: PlaybookIntegrity
+    listKind: PlaybookIntegrityList
+    plural: playbookintegrities
+    singular: playbookintegrity
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: PlaybookIntegrity is the Schema for the Ansible Playbook Integrity API
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              tower_auth_secret:
+                type: string
+              project_name:
+                type: string
+                description: A project name for enabling playbook integrity
+              enabled:
+                type: boolean
+                description: A flag of enabling playbook integrity check
+              public_key:
+                type: string
+                description: Base64 encoded public keyring byte
+            required:
+            - tower_auth_secret
+            type: object
+        type: object
+        x-kubernetes-preserve-unknown-fields: true
+    served: true
+    storage: true
+    subresources:
+      status: {}

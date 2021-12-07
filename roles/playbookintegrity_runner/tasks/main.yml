@@ -1,0 +1,123 @@
+---
+
+- name: Read PlaybookIntegrity Specs
+  k8s_info:
+    kind: PlaybookIntegrity
+    api_version: tower.ansible.com/v1alpha1
+    name: "{{ lookup('env', 'PLAYBOOKINTEGRITY_NAME') }}"
+    namespace: "{{ lookup('env', 'PLAYBOOKINTEGRITY_NAMESPACE') }}"
+  register: playbook_integrity
+
+- name: Set AAP vars
+  set_fact:
+    aap_api_url: "{{ lookup('env','CONTROLLER_HOST') | trim }}/api/v2/"
+    aap_token: "{{ lookup('env','TOKEN') | b64decode | trim }}"
+
+- name: Debug
+  debug:
+    msg: "aap_api_url: '{{ aap_api_url }}', aap_token: '{{ aap_token }}'"
+
+- name: Get Project configuration
+  shell: | 
+    curl -s -k -f -H 'Content-Type: application/json' -XGET --user '{{ aap_token }}' '{{ aap_api_url }}projects/' > projects.json
+    cat projects.json | jq .results | jq '.[] | select(.name=="{{ lookup('env','CONTROLLER_PROJECT_NAME') }}")' > target_project.json
+    proj_id=$(cat target_project.json | jq -r .id)
+    echo $proj_id > project_id
+    cat target_project.json | jq -r .name > project_name
+
+- name: End if update is not necessary
+  block:
+  - name: Check if force
+    set_fact:
+      need_update: "{{ True }}"
+    when: lookup('env','FORCE_UPDATE') == 'True'
+  - name: Check diff in project cnofig
+    shell: |
+      current_enabled=$(cat target_project.json | jq -r .playbook_integrity_enabled)
+      current_pubkey=$(cat target_project.json | jq -r .playbook_integrity_public_key)
+      new_enabled={{ 'true' if playbook_integrity['resources'][0]['spec']['enabled'] else 'false' }}
+      new_pubkey={{ playbook_integrity['resources'][0]['spec']['public_key'] }}
+      if [[ $current_enabled != $new_enabled ]]; then
+        touch need_update_file
+        exit 0
+      fi
+      if [[ $current_pubkey != $new_pubkey ]]; then
+        touch need_update_file
+        exit 0
+      fi
+    when: need_update is not defined
+  - name: Stat need_update_file
+    stat:
+      path: need_update_file
+    register: need_update_file_stat
+    when: need_update is not defined
+  - name: Set need_update
+    set_fact:
+      need_update: "{{ True }}"
+    when: need_update is not defined and need_update_file_stat.stat.exists
+  - name: Show result
+    debug:
+      msg: "{{ 'update the project' if need_update is defined and need_update else 'no need to update the project. exitting this play..' }}"
+  - name: End play without update
+    meta: end_play
+    when: need_update is not defined or not need_update
+
+- name: Update Project configuration based on PlaybookIntegrity
+  shell: | 
+    proj_id=$(cat project_id)
+    enabled={{ 'true' if playbook_integrity['resources'][0]['spec']['enabled'] else 'false' }}
+    pubkey={{ playbook_integrity['resources'][0]['spec']['public_key'] }}
+    curl -s -k -f -H 'Content-Type: application/json' -XPATCH --user '{{ aap_token }}' "{{ aap_api_url }}projects/$proj_id/" -d "{\"playbook_integrity_enabled\":$enabled,\"playbook_integrity_public_key\":\"$pubkey\"}"
+  when: need_update is defined and need_update
+
+- name: Debug
+  debug:
+    msg: "host: {{ lookup('env','CONTROLLER_HOST') | trim }}, username: {{ aap_token.split(':')[0] }}, password: {{ aap_token.split(':')[1] }}"
+
+- name: Trigger project update
+  block:
+    - name: Trigger project update
+      awx.awx.project_update:
+        name: "{{ lookup('file', 'project_name') }}"
+        controller_host: "{{ lookup('env','CONTROLLER_HOST') | trim }}"
+        controller_username: "{{ aap_token.split(':')[0] }}"
+        controller_password: "{{ aap_token.split(':')[1] }}"
+        validate_certs: "no"
+      register: project_update_job
+
+- name: Debug
+  debug:
+    var: project_update_job
+
+- name: Get playbook integrity result from API
+  shell: | 
+    curl -s -k -f -H 'Content-Type: application/json' -XGET --user '{{ aap_token }}' "{{ aap_api_url }}projects/{{ lookup('file', 'project_id') }}/" > updated_project.json
+    cat updated_project.json | jq -r .playbook_integrity_enabled > playbook_integrity_enabled
+    cat updated_project.json | jq -r .playbook_integrity_latest_result > playbook_integrity_latest_result
+
+- name: Update PlaybookIntegrity definition with Tower job id
+  k8s:
+    state: present
+    definition:
+      kind: PlaybookIntegrity
+      apiVersion: tower.ansible.com/v1alpha1
+      metadata:
+        name: "{{ lookup('env', 'PLAYBOOKINTEGRITY_NAME') }}"
+        namespace: "{{ lookup('env', 'PLAYBOOKINTEGRITY_NAMESPACE') }}"
+        labels:
+          tower_job_id: "{{ project_update_job.id }}"
+
+- name: Update PlaybookIntegrity status with Tower project update status and url
+  k8s_status:
+    api_version: tower.ansible.com/v1alpha1
+    kind: PlaybookIntegrity
+    name: "{{ lookup('env', 'PLAYBOOKINTEGRITY_NAME') }}"
+    namespace: "{{ lookup('env', 'PLAYBOOKINTEGRITY_NAMESPACE') }}"
+    status:
+      playbookIntegrityResult:
+        elapsed: "{{ project_update_job.elapsed }}"
+        finished: "{{ project_update_job.finished }}"
+        started: "{{ project_update_job.started }}"
+        status: "{{ project_update_job.status }}"
+        enabled: "{{ lookup('file', 'playbook_integrity_enabled') }}"
+        latest_result: "{{ lookup('file', 'playbook_integrity_latest_result') }}"

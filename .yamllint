@@ -1,0 +1,15 @@
+---
+extends: default
+
+ignore: |
+  .cache/
+  kustomization.yaml
+  awx-playbook-integrity-operator.clusterserviceversion.yaml
+  bundle
+  config/testing/kustomization.yaml
+
+rules:
+  truthy: disable
+  line-length:
+    max: 170
+    level: warning
