@@ -25,13 +25,13 @@
     echo $proj_id > project_id
     cat target_project.json | jq -r .name > project_name
 
-- name: End if update is not necessary
+- name: Check if update is necessary or not
   block:
   - name: Check if force
     set_fact:
       need_update: "{{ True }}"
     when: lookup('env','FORCE_UPDATE') == 'True'
-  - name: Check diff in project cnofig
+  - name: Check diff in project config
     shell: |
       current_enabled=$(cat target_project.json | jq -r .playbook_integrity_enabled)
       current_pubkey=$(cat target_project.json | jq -r .playbook_integrity_public_key)
@@ -57,10 +57,62 @@
     when: need_update is not defined and need_update_file_stat.stat.exists
   - name: Show result
     debug:
-      msg: "{{ 'update the project' if need_update is defined and need_update else 'no need to update the project. exitting this play..' }}"
-  - name: End play without update
+      msg: "{{ 'update the project' if need_update is defined and need_update else 'no need to update the project' }}"
+
+- name: End play if no need to update the project
+  block:
+  - name: check if status is different from the latest result
+    shell: |
+      cat target_project.json | jq -r .playbook_integrity_enabled > playbook_integrity_enabled
+      new_latest_result=$(cat target_project.json | jq --sort-keys -c .playbook_integrity_latest_result )
+      echo -e "$new_latest_result" | jq -c . > playbook_integrity_latest_result
+
+      echo -e '{{ playbook_integrity['resources'][0]['status'] | to_json }}' | tr -d '[:cntrl:]' > res_status.json
+
+      if [[ $res_status_result == "null" ]]; then
+        touch need_status_update_file
+        exit 0
+      fi
+
+      current_latest_result=$(echo -e $res_status_result | jq --sort-keys -c .latest_result )
+      if [[ $current_latest_result != $new_latest_result ]]; then
+        echo "debug 2"
+        echo "---------------------------------------------"
+        echo $current_latest_result 
+        echo "---------------------------------------------"
+        echo $new_latest_result 
+        echo "---------------------------------------------"
+        touch need_status_update_file
+        exit 0
+      fi
+    register: debug_cmd
+  - name: debug
+    debug:
+      msg: "{{ debug_cmd.stdout }}"
+  - name: debug2
+    debug:
+      msg: "{{ debug_cmd.stderr }}"
+  - name: debug3
+    debug:
+      var: lookup('file', 'res_status.json')
+  - name: Stat need_status_update_file
+    stat:
+      path: need_status_update_file
+    register: need_status_update_file_stat
+  - name: Update status of PlaybookIntegrity if needed before ending this play
+    k8s_status:
+      api_version: tower.ansible.com/v1alpha1
+      kind: PlaybookIntegrity
+      name: "{{ lookup('env', 'PLAYBOOKINTEGRITY_NAME') }}"
+      namespace: "{{ lookup('env', 'PLAYBOOKINTEGRITY_NAMESPACE') }}"
+      status:
+        playbookIntegrityResult:
+          enabled: "{{ lookup('file', 'playbook_integrity_enabled') }}"
+          latest_result: "{{ lookup('file', 'playbook_integrity_latest_result') }}"
+    when: need_status_update_file_stat.stat.exists
+  - name: End play
     meta: end_play
-    when: need_update is not defined or not need_update
+  when: need_update is not defined or not need_update
 
 - name: Update Project configuration based on PlaybookIntegrity
   shell: | 

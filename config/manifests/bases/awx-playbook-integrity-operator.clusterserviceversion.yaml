@@ -1,0 +1,49 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: awx-playbook-integrity-operator.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions: {}
+  description: The Ansible Automation Platform Playbook Integrity Operator manages
+    launching PlaybookIntegrities.
+  displayName: AWX Playbook Integrity Operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - automation
+  - ansible
+  - tower
+  - awx
+  - playbook
+  - integrity
+  - ci
+  - cd
+  links:
+  - name: Awx Playbook Integrity Operator
+    url: https://awx-playbook-integrity-operator.domain
+  maintainers:
+  - email: ocm-dev@open-cluster-management.io'
+    name: '''Open Cluster Management Project team'
+  maturity: alpha
+  provider:
+    name: Red Hat
+  version: 0.0.0

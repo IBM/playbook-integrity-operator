@@ -29,16 +29,20 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
 # ansible.com/awx-playbook-integrity-operator-bundle:$VERSION and ansible.com/awx-playbook-integrity-operator-catalog:$VERSION.
-IMAGE_TAG_BASE ?= quay.io/ansible/awx-playbook-integrity-operator
+# IMAGE_TAG_BASE ?= quay.io/ansible/awx-playbook-integrity-operator
+IMAGE_TAG_BASE ?= ghcr.io/hirokuni-kitahara/awx-playbook-integrity-operator
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
-BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
+# BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
+BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:dev
 
 # Image URL to use all building/pushing image targets
-IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
+# IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
+IMG ?= $(IMAGE_TAG_BASE):dev
 
-RUNNER_IMAGE_TAG_BASE ?= quay.io/open-cluster-management/platform-resource-runner
+# RUNNER_IMAGE_TAG_BASE ?= quay.io/open-cluster-management/platform-resource-runner
+RUNNER_IMAGE_TAG_BASE ?= ghcr.io/hirokuni-kitahara/playbook-integrity-runner
 RUNNER_VERSION ?= latest
 RUNNER_IMG ?= $(RUNNER_IMAGE_TAG_BASE):$(RUNNER_VERSION)
 
