@@ -29,11 +29,11 @@ kind: PlaybookIntegrity
 metadata:
   name: demo-playbook-integrity
 spec:
-  tower_auth_secret: towerauthsecret               # a secret name to access ansible controller
-  project_name: Demo Playbook Integrity Project    # an Ansible Project name you are configuring 
-  enabled: true                                    # a flag to enable/disable playbook integrity check
-  public_key: <base64-encoded-public-key>          # a base64 encoded public key for playbook verification
-  signature_type: <gpg/x509/sigstore>              # a signature type (gpg/x509/sigstore)
+  tower_auth_secret: <secret-name>       # a secret name to access ansible controller
+  project_name: <project-name>           # an Ansible Project name you are configuring 
+  enabled: <true/false>                  # a flag to enable/disable playbook integrity check
+  public_key: <base64-encoded-pubkey>    # a base64 encoded public key for playbook verification
+  signature_type: <gpg/x509/sigstore>    # a signature type (gpg/x509/sigstore)
 ```
 
 When you create the PlaybookIntegrity, a Kubernetes Job for configuring the project will be executed immediately.
