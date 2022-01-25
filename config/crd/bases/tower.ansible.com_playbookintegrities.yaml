@@ -36,6 +36,9 @@ spec:
               public_key:
                 type: string
                 description: Base64 encoded public keyring byte
+              signature_type:
+                type: string
+                description: Signature type for playbook files in SCM repo
             required:
             - tower_auth_secret
             type: object

@@ -31,21 +31,39 @@
     set_fact:
       need_update: "{{ True }}"
     when: lookup('env','FORCE_UPDATE') == 'True'
-  - name: Check diff in project config
+  - name: Check diff in project config and integrity result
     shell: |
       current_enabled=$(cat target_project.json | jq -r .playbook_integrity_enabled)
       current_pubkey=$(cat target_project.json | jq -r .playbook_integrity_public_key)
       new_enabled={{ 'true' if playbook_integrity['resources'][0]['spec']['enabled'] else 'false' }}
-      new_pubkey={{ playbook_integrity['resources'][0]['spec']['public_key'] }}
+      new_pubkey=$(echo '{{ playbook_integrity['resources'][0]['spec']['public_key'] }}')
+      latest_result_in_db=$(cat target_project.json | jq -r .playbook_integrity_latest_result | jq --sort-keys -c . )
+      latest_result_in_resource=$(echo '{{ playbook_integrity['resources'][0]['status']['playbookIntegrityResult']['latest_result'] | to_json }}' | jq --sort-keys -c . )
+      echo "[DEBUG1] $latest_result_in_db"
+      echo "[DEBUG2] $latest_result_in_resource"
       if [[ $current_enabled != $new_enabled ]]; then
+        echo "[DEBUG3] A"
         touch need_update_file
         exit 0
       fi
       if [[ $current_pubkey != $new_pubkey ]]; then
+        echo "[DEBUG3] B"
         touch need_update_file
         exit 0
       fi
+      if [[ "$latest_result_in_db" != "$latest_result_in_resource" ]]; then
+        echo "[DEBUG3] C"
+        echo "$latest_result_in_db"
+        echo "$latest_result_in_resource"
+        touch need_update_file
+        exit 0
+      fi
+      echo "[DEBUG3] D"
     when: need_update is not defined
+    register: update_check
+  - name: debug update_check
+    debug:
+      var: update_check
   - name: Stat need_update_file
     stat:
       path: need_update_file
@@ -57,7 +75,7 @@
     when: need_update is not defined and need_update_file_stat.stat.exists
   - name: Show result
     debug:
-      msg: "{{ 'update the project' if need_update is defined and need_update else 'no need to update the project' }}"
+      msg: "{{ 'update the project' if need_update is defined and need_update == True else 'no need to update the project' }}"
 
 - name: End play if no need to update the project
   block:
@@ -119,7 +137,8 @@
     proj_id=$(cat project_id)
     enabled={{ 'true' if playbook_integrity['resources'][0]['spec']['enabled'] else 'false' }}
     pubkey={{ playbook_integrity['resources'][0]['spec']['public_key'] }}
-    curl -s -k -f -H 'Content-Type: application/json' -XPATCH --user '{{ aap_token }}' "{{ aap_api_url }}projects/$proj_id/" -d "{\"playbook_integrity_enabled\":$enabled,\"playbook_integrity_public_key\":\"$pubkey\"}"
+    sigtype={{ playbook_integrity['resources'][0]['spec']['signature_type'] | default('gpg') }}
+    curl -s -k -f -H 'Content-Type: application/json' -XPATCH --user '{{ aap_token }}' "{{ aap_api_url }}projects/$proj_id/" -d "{\"playbook_integrity_enabled\":$enabled,\"playbook_integrity_public_key\":\"$pubkey\",\"playbook_integrity_signature_type\":\"$sigtype\"}"
   when: need_update is defined and need_update
 
 - name: Debug
